@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -18,10 +19,18 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    chmod +x build.sh
-                    ./build.sh ${BUILD_NUMBER}
-                '''
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_PASS'
+                    )
+                ]) {
+                    sh '''
+                        chmod +x build.sh
+                        ./build.sh ${BUILD_NUMBER}
+                    '''
+                }
             }
         }
 
@@ -64,7 +73,7 @@ pipeline {
 
         stage('Push PROD Image') {
             when {
-                branch 'master'
+                branch 'main'
             }
 
             steps {
@@ -99,7 +108,7 @@ pipeline {
 
         stage('Deploy PROD') {
             when {
-                branch 'master'
+                branch 'main'
             }
 
             steps {
@@ -120,3 +129,4 @@ pipeline {
         }
     }
 }
+```
