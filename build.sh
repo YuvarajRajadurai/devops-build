@@ -1,4 +1,4 @@
-```bash
+
 #!/bin/bash
 
 # build.sh
@@ -22,4 +22,3 @@ docker build \
 
 echo ">> Docker build completed successfully"
 echo ">> Image: ${IMAGE_NAME}:${BUILD_TAG}"
-```
