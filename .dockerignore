@@ -1,0 +1,12 @@
+.git
+.gitignore
+.dockerignore
+README.md
+*.md
+Jenkinsfile
+build.sh
+deploy.sh
+docker-compose*.yml
+node_modules
+npm-debug.log
+.env

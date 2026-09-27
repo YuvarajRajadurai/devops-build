@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  web:
+    image: ${DOCKERHUB_USER}/devops-build-${ENVIRONMENT:-dev}:${TAG:-latest}
+    container_name: devops-build-app
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
