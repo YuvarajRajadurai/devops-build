@@ -2,53 +2,114 @@ pipeline {
     agent any
 
     environment {
-        // Jenkins "Username with password" credential holding your Docker Hub creds
-        DOCKERHUB      = credentials('dockerhub-creds')       // -> DOCKERHUB_USR / DOCKERHUB_PSW
-        DOCKERHUB_USER = "${DOCKERHUB_USR}"
-        DOCKERHUB_PASS = "${DOCKERHUB_PSW}"
-
-        // EC2 deployment target
-        SERVER_IP      = 'YOUR_EC2_PUBLIC_IP'
-        SERVER_USER    = 'ubuntu'
-        SSH_KEY_PATH   = credentials('ec2-ssh-key-path') // "Secret file" credential (the .pem)
-    }
-
-    triggers {
-        // Works alongside a GitHub webhook trigger configured on the job
-        githubPush()
+        DOCKERHUB_USER = 'yuvarajjr'
+        DEV_IMAGE = "${DOCKERHUB_USER}/devops-build-dev"
+        PROD_IMAGE = "${DOCKERHUB_USER}/devops-build-prod"
+        CONTAINER_NAME = 'devops-build'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
-                script {
-                    env.BRANCH = env.GIT_BRANCH?.replaceFirst(/^origin\//, '') ?: env.BRANCH_NAME
-                    echo "Building branch: ${env.BRANCH}"
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    chmod +x build.sh
+                    ./build.sh ${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login \
+                            -u "$DOCKER_USER" \
+                            --password-stdin
+                    '''
                 }
             }
         }
 
-        stage('Build Image') {
-            steps {
-                sh 'chmod +x build.sh deploy.sh'
-                sh "./build.sh ${env.BRANCH}"
-            }
-        }
-
-        stage('Push Image') {
-            // push happens inside build.sh; this stage is just a visual gate/approval point
+        stage('Push DEV Image') {
             when {
-                anyOf { branch 'dev'; branch 'master'; branch 'main' }
+                branch 'dev'
             }
+
             steps {
-                echo "Image pushed to Docker Hub for branch ${env.BRANCH}"
+                sh '''
+                    docker tag devops-build:${BUILD_NUMBER} \
+                        ${DEV_IMAGE}:${BUILD_NUMBER}
+
+                    docker tag devops-build:${BUILD_NUMBER} \
+                        ${DEV_IMAGE}:latest
+
+                    docker push ${DEV_IMAGE}:${BUILD_NUMBER}
+                    docker push ${DEV_IMAGE}:latest
+                '''
             }
         }
 
-        stage('Deploy to EC2') {
+        stage('Push PROD Image') {
+            when {
+                branch 'master'
+            }
+
             steps {
-                sh "./deploy.sh ${env.BRANCH}"
+                sh '''
+                    docker tag devops-build:${BUILD_NUMBER} \
+                        ${PROD_IMAGE}:${BUILD_NUMBER}
+
+                    docker tag devops-build:${BUILD_NUMBER} \
+                        ${PROD_IMAGE}:latest
+
+                    docker push ${PROD_IMAGE}:${BUILD_NUMBER}
+                    docker push ${PROD_IMAGE}:latest
+                '''
+            }
+        }
+
+        stage('Deploy DEV') {
+            when {
+                branch 'dev'
+            }
+
+            steps {
+                sh '''
+                    export IMAGE_NAME="${DEV_IMAGE}"
+                    export IMAGE_TAG="${BUILD_NUMBER}"
+
+                    chmod +x deploy.sh
+                    ./deploy.sh
+                '''
+            }
+        }
+
+        stage('Deploy PROD') {
+            when {
+                branch 'master'
+            }
+
+            steps {
+                sh '''
+                    export IMAGE_NAME="${PROD_IMAGE}"
+                    export IMAGE_TAG="${BUILD_NUMBER}"
+
+                    chmod +x deploy.sh
+                    ./deploy.sh
+                '''
             }
         }
     }
@@ -56,12 +117,6 @@ pipeline {
     post {
         always {
             sh 'docker logout || true'
-        }
-        success {
-            echo "Pipeline succeeded for branch ${env.BRANCH}"
-        }
-        failure {
-            echo "Pipeline failed for branch ${env.BRANCH}"
         }
     }
 }
