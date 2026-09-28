@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -5,16 +6,9 @@ pipeline {
         DOCKERHUB_USER = 'yuvarajjr'
         DEV_IMAGE = "${DOCKERHUB_USER}/devops-build-dev"
         PROD_IMAGE = "${DOCKERHUB_USER}/devops-build-prod"
-        CONTAINER_NAME = 'devops-build'
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Build Docker Image') {
             steps {
@@ -29,7 +23,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'dockerhub-creds',
+                        credentialsId: 'dockerhub-cred',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )
@@ -47,7 +41,6 @@ pipeline {
             when {
                 branch 'dev'
             }
-
             steps {
                 sh '''
                     docker tag devops-build:${BUILD_NUMBER} \
@@ -64,9 +57,8 @@ pipeline {
 
         stage('Push PROD Image') {
             when {
-                branch 'master'
+                branch 'main'
             }
-
             steps {
                 sh '''
                     docker tag devops-build:${BUILD_NUMBER} \
@@ -85,7 +77,6 @@ pipeline {
             when {
                 branch 'dev'
             }
-
             steps {
                 sh '''
                     export IMAGE_NAME="${DEV_IMAGE}"
@@ -99,9 +90,8 @@ pipeline {
 
         stage('Deploy PROD') {
             when {
-                branch 'master'
+                branch 'main'
             }
-
             steps {
                 sh '''
                     export IMAGE_NAME="${PROD_IMAGE}"
